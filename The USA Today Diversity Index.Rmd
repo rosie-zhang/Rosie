@@ -1,0 +1,304 @@
+---
+title: "The USA Today Diversity Index"
+author: shunyue zhang
+output: html_document
+---
+
+```{r}
+# preprocessing
+rm(list=ls())
+
+library(dplyr)
+library(tidyverse)
+library(tidycensus)
+library(tidyr)
+library(ggplot2)
+
+census_api_key("f8213ade1d1128316c220278fcd45f91b36dc421",install = TRUE, overwrite = TRUE)
+readRenviron("~/.Renviron")
+
+# get data from the ACS
+race_pre <- get_acs(state = c("New York","New Jersey","Connecticut"), geography = "county", 
+                variables = c("B02001_001","B02001_002","B02001_003","B02001_004",
+                              "B02001_005","B02001_006"), geometry = TRUE)
+
+
+ethnicity_pre <- get_acs(state = c("New York","New Jersey","Connecticut"), geography = "county", 
+                     variables =  c("B03002_001","B03002_002","B03002_012"), geometry = TRUE)
+
+
+
+# To remove Margin of Error from the set
+race <- race_pre[,-5]
+ethnicity <- ethnicity_pre[,-5]
+
+ethnicity
+
+```
+
+```{r}
+# Qestion 1
+"ACS data is available at each of those levels - citye, county, state; 
+however in this assignment, we will focus on county level. 
+ACS is available for every five years, while deccenial census is available for every 10 years, 
+for example, 1990, 2000, 2010, etc."
+```
+
+```{r}
+# Question 2
+"B03002001 - Total Population
+B03002002 - Not Hispanic or Latino
+B03002012 - Hispanic or Latino
+B02001001 - Total Population
+B02001002 - White Alone
+B02001003 - Black or African American Alone
+B02001004 - American Indian and Alaska Native Alone
+B02001005 - Asian Alone
+B02001006 - Native Hawaiian and Other Pacific Islander Alone"
+
+```
+
+```{r}
+# Question 3
+"The racial categories included in the census questionnaire generally reflect a social 
+definition of race recognized in this country and not an attempt to define race biologically, 
+anthropologically, or genetically. In addition, it is recognized that the categories of the race 
+item include racial and national origin or sociocultural groups. People may choose to report more 
+than one race to indicate their racial mixture, such as 'American Indian' and 'White.' People who 
+identify their origin as Hispanic, Latino, or Spanish may be of any race.The racial 
+classifications used by the Census Bureau adhere to the October 30, 1997, Federal Register 
+notice entitled, 'Revisions to the Standards for the Classification of Federal Data on Race 
+and Ethnicity' issued by OMB. These standards govern the categories used to collect and present 
+federal data on race and ethnicity. OMB requires five minimum categories (White, Black or African 
+American, American Indian or Alaska Native, Asian, and Native Hawaiian or Other Pacific Islander) 
+for race. The race categories are described below with a sixth category, 'Some Other Race,' added 
+with OMB approval. In addition to the five race groups, OMB also states that respondents.
+
+# Yes, it is very important information to report under assumptions for this analysis, 
+since we are analyzing the diversity by county level in three states. If racial groups were 
+not clearly defined or reported, the accuracy of this analysis would be very questionable."
+```
+
+```{r}
+# Question 4
+
+"Yes, Margin of Error is provided in the dataset for both race and ethnicity, as they are included 
+in the data fetched above. It allows analysts to get an idea how accuracy their results are."
+
+```
+
+```{r}
+# Question 5
+"Please refer to codes on top of this file."
+##### Step 1 ##### 
+
+# Calculate each group's share of the population. 
+
+#use the spread function
+race_spread <- race %>%
+  spread(variable,estimate)
+
+ethnicity_spread <- ethnicity %>%
+  spread(variable,estimate)
+# To change column names
+colnames(race_spread)[3:8] <- c("race_total","white","black","american_indian","asian",
+                                "hawaiian_other")
+
+colnames(ethnicity_spread)[3:5] <- c("ethnicity_total","non_hispanic","hispanic")
+
+
+# Calculate the race proportion using formula provided
+race_spread$white_percent<-race_spread$white/race_spread$race_total
+race_spread$black_percent<-race_spread$black/race_spread$race_total
+race_spread$american_indian_percent<-race_spread$american_indian/race_spread$race_total
+race_spread$asian_percent<-race_spread$asian/race_spread$race_total
+race_spread$hawaiian_percent<-race_spread$hawaiian_other/race_spread$race_total
+
+race_spread
+
+
+```
+
+```{r}
+##### Step 2 ##### 
+
+# Take each racial group's share of the population, square it and sum the results.
+
+
+race_spread$step2<-race_spread$white_percent^2+race_spread$black_percent^2+race_spread$american_indian_percent^2+race_spread$asian_percent^2+race_spread$hawaiian_percent^2
+
+race_spread$step2
+```
+
+```{r}
+##### Step 3 ##### 
+
+# Take the Hispanic and non-Hispanic percentages of the population, square each and add them to get the chance that any two people will be Hispanic or not
+
+ethnicity_spread$hispanic_percent <-ethnicity_spread$hispanic/ethnicity_spread$ethnicity_total
+
+ethnicity_spread$non_hispanic_percent <-ethnicity_spread$non_hispanic/ethnicity_spread$ethnicity_total
+
+ethnicity_spread$ethnicity_percent <- ethnicity_spread$hispanic_percent^2 + 
+  ethnicity_spread$non_hispanic_percent^2
+
+```
+
+```{r}
+##### Step 4 ##### 
+
+# To calculate whether two people are the same on both measures, multiply the results of the ???rst two steps. This is the probability that any two people are the SAME by race and ethnicity.
+
+ethnicity_spread$same <- race_spread$step2 * ethnicity_spread$ethnicity_percent
+
+
+```
+
+```{r}
+##### Step 5 ##### 
+
+# Subtract the result from 1 to get the chance that two people are di???erent - diverse. For ease of use, multiply the result by 100 to place it on a scale from 0 to 100. Create a new column with your USA Today Diversity Index value.
+
+ethnicity_spread$DiversityIndex <- (1- ethnicity_spread$same)*100
+ethnicity_spread$DiversityIndex
+
+```
+
+```{r}
+##### Step 6 #####
+
+# Create a histogram of USA Today Diversity Index values. Describe the shape of the histogram in statistical terms (Hint: skewness).
+
+hist(ethnicity_spread$DiversityIndex, main = "Histogram: \nUSA Today Diversity Index Values", 
+     xlab = "Diversity", ylab = "Count", 
+     col = "firebrick", density = 75,
+     angle = 50, border = "black")
+
+"The shape is right-skewed."
+```
+
+```{r}
+##### Step 7 #####
+
+# Create a visualization which compares the top 10 counties and their diversity index value using ggplot2. 
+
+# This statement will figure out the top 10 diversity index numbers
+high_to_low <- sort(ethnicity_spread$DiversityIndex, decreasing = TRUE)[1:10]
+
+# This statement will create the data frame containing all information for the top 10 counties
+Top_10 <- subset(ethnicity_spread,ethnicity_spread$DiversityIndex %in% high_to_low)
+
+# Using ggplot point graph to visualize
+
+ggplot(data = Top_10) + 
+  
+  #map aesthetics and choose plot type
+  geom_point(aes(x=NAME, y=DiversityIndex), color = "firebrick", fill = "firebrick") + 
+  
+  # labs will give you your label arguments
+  labs(title="Histogram: Top 10 Counties with Diversity Index", x="County", y="Diversity Index")+
+  
+  theme_minimal()
+```
+
+```{r}
+##### Step 8 #####
+
+# Using the lea???et mapping library for R (or another mapping library of your choice), visualize the USA Today Diversity Index by county for New York, New Jersey and Connecticut.
+
+#install leaflet package
+install.packages("leaflet")
+library(leaflet)
+library(stringr)
+library(sf)
+install.packages("mapview")
+library(mapview)
+options(tigris_use_cache = TRUE)
+
+pal <- colorQuantile(palette = "viridis", domain = ethnicity_spread$DiversityIndex, n = 10)
+
+# For clearer visualization, I will round the diversity index to 3 decimal points.
+
+Rounded <- round(ethnicity_spread$DiversityIndex, 3)
+
+# Mapping and Plotting
+
+ethnicity_spread %>%
+  st_transform(crs = "+init=epsg:4326") %>%
+  leaflet(width = "100%") %>%
+  addProviderTiles(provider = "CartoDB.Positron") %>%
+  addPolygons(popup = ~ paste0(str_extract(NAME, "^([^,]*)"), ', ', "Diversity Index=" , Rounded),
+              stroke = FALSE,
+              smoothFactor = 0,
+              fillOpacity = 0.7,
+              color = ~ pal(DiversityIndex)) %>%
+  
+  addLegend("bottomright", 
+            pal = pal, 
+            values = ~ DiversityIndex,
+            title = "DiversityIndex",
+            opacity = 1)
+
+```
+
+```{r}
+##### Step 9 #####
+
+#Display the following data in the "tooltip" when mousing over your plot: USA Today Diversity Index Value and County Name.
+
+"Please refer to Step 8"
+```
+
+```{r}
+##### Step 10 #####
+
+#Does there appear to be any relationship between geography and diversity? Which state appears to be the most diverse?
+
+"Yes, there is a relationship between geography and diversity. New Jersey appear to be the most diverse state (although Connecticut looks quite close too). New York is quite diverse on the lower side (close to New York City area), but upper side are less diverse."
+```
+
+```{r}
+##### Extra Credit 11 #####
+
+# Create a new data frame using the tidycensus API with data on median household income by county for New York, New Jersey and Connecticut. Join this data together with the data from New York County. Use ggplot2 (or another visualization library) to visualize the USA Today Diversity Index value and median household incomeon the same plot (Hint: try facet wrap!). 
+
+# Fetching Data from ACS. P.S. Data from New York County is already included when fetching data for New York State on county level.
+median_income<- get_acs(state = c("New York","New Jersey","Connecticut"), geography = "county", 
+                 variables = c(medincome = "B19013_001"), geometry = TRUE)
+
+# Combining Data
+joined_data <- cbind(median_income, ethnicity_spread)
+joined_data
+
+
+pal <- colorNumeric(palette = "viridis", domain = joined_data$estimate)
+
+# Mapping and Plotting
+
+joined_data %>%
+  st_transform(crs = "+init=epsg:4326") %>%
+  leaflet(width = "100%") %>%
+  addProviderTiles(provider = "CartoDB.Positron") %>%
+  addPolygons(popup = ~ paste0(str_extract(NAME, "^([^,]*)"), ', ', "Diversity Index=" , Rounded, ', ','Median Income=', estimate),
+              stroke = FALSE,
+              smoothFactor = 0,
+              fillOpacity = 0.7,
+              color = ~ pal(estimate)) %>%
+  
+  addLegend("bottomright", 
+            pal = pal, 
+            values = ~ estimate,
+            title = "Median Income",
+            labFormat = labelFormat(prefix = "$"),
+            opacity = 1)
+```
+
+```{r}
+##### Extra Credit 12 #####
+
+# Does there appear to be any relationship between median household income and diversity? How do counties di???er on these two measures?
+
+"Yes, there appears to be relationship between median household income and diversity, which is positively correlated - in general term, the more a county is diversified, the higher median income will be."
+
+```
+
